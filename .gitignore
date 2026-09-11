@@ -214,6 +214,8 @@ dist-ssr/
 *.sqlite3
 *.db
 *.db3
+backend/data/*.json
+backend/data/
 
 # ------------------------------------------
 # Temporary & Log Files

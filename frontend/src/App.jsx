@@ -1,323 +1,422 @@
-import { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef } from 'react';
+import { Header } from './components/Header';
+import { EmptyState } from './components/EmptyState';
+import { ChatMessageItem } from './components/ChatMessageItem';
+import { TypingIndicator } from './components/TypingIndicator';
+import { DevPanel } from './components/DevPanel';
+import { SettingsModal } from './components/SettingsModal';
+import { soundEffects } from './utils/audio';
+import {
+  sendMessage,
+  getState,
+  getHistory,
+  clearHistory,
+  resetMood,
+  resetAll,
+  overrideMood,
+  regenerateLast,
+  updateName,
+} from './services/api';
+import { DEFAULT_SETTINGS, MOOD_META } from './types';
 
-const SUGGESTED_PROMPTS = [
-  "What should we do together today?",
-  "Tell me something sweet and uplifting ✨",
-  "Help me plan a relaxing weekend trip",
-  "Write a heartfelt note for me 💌",
-]
+export default function App() {
+  const [messages, setMessages] = useState([]);
+  const [prompt, setPrompt] = useState('');
+  const [characterState, setCharacterState] = useState({
+    characterName: 'Mira',
+    currentMood: 'normal',
+    moodIntensity: 0.5,
+    energy: 0.7,
+    patience: 0.8,
+    angerLevel: 0.0,
+    sadnessLevel: 0.0,
+    messageCount: 0,
+    ignoredMessages: 0,
+    typingStyle: 'normal',
+    lastMood: 'normal',
+  });
+  const [isLoading, setIsLoading] = useState(false);
+  const [activeModel, setActiveModel] = useState('gemini-2.5-flash');
+  const [isDevPanelOpen, setIsDevPanelOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [errorToast, setErrorToast] = useState(null);
 
-function App() {
-  const [prompt, setPrompt] = useState('')
-  const [messages, setMessages] = useState(() => {
+  // Settings persisted in localStorage
+  const [settings, setSettings] = useState(() => {
     try {
-      const saved = localStorage.getItem('chat_messages')
-      return saved ? JSON.parse(saved) : []
+      const saved = localStorage.getItem('mood_ai_settings');
+      return saved ? { ...DEFAULT_SETTINGS, ...JSON.parse(saved) } : DEFAULT_SETTINGS;
     } catch {
-      return []
+      return DEFAULT_SETTINGS;
     }
-  })
-  const [selectedMode, setSelectedMode] = useState(() => {
-    return localStorage.getItem('chat_mode') || 'Default'
-  })
-  const [isModesOpen, setIsModesOpen] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
-  const [copiedId, setCopiedId] = useState(null)
-  const [activeModel, setActiveModel] = useState('gemini-2.5-flash')
+  });
 
-  const messagesEndRef = useRef(null)
-  const inputRef = useRef(null)
+  const messagesEndRef = useRef(null);
+  const inputRef = useRef(null);
 
-  const modes = [
-    { name: 'Default', desc: 'Warm & intelligent companion' },
-    { name: 'Roleplay', desc: 'Sweet & affectionate babe vibe' },
-    { name: 'Creative', desc: 'Poetic, expressive & vivid' },
-    { name: 'Concise', desc: 'Short, sweet & to the point' },
-    { name: 'Coding', desc: 'Technical & programming help' },
-  ]
-
-  // Persist messages to localStorage
+  // Persist settings
   useEffect(() => {
     try {
-      localStorage.setItem('chat_messages', JSON.stringify(messages))
-    } catch (e) {
-      console.warn('Could not save messages to localStorage', e)
+      localStorage.setItem('mood_ai_settings', JSON.stringify(settings));
+    } catch {
+      // ignore
     }
-  }, [messages])
+  }, [settings]);
 
-  // Persist mode to localStorage
+  // Initial load from backend (character state & conversation history)
   useEffect(() => {
-    localStorage.setItem('chat_mode', selectedMode)
-  }, [selectedMode])
+    const initData = async () => {
+      try {
+        const [stateRes, historyRes] = await Promise.all([
+          getState().catch(() => null),
+          getHistory().catch(() => []),
+        ]);
 
-  // Auto-scroll on new message
+        if (stateRes) {
+          const loadedState = stateRes.characterState || stateRes;
+          setCharacterState(loadedState);
+          const name = stateRes.characterName || loadedState.characterName;
+          if (name) {
+            setSettings((prev) => ({ ...prev, characterName: name }));
+          }
+        }
+
+        if (historyRes && historyRes.length > 0) {
+          setMessages(historyRes);
+        }
+      } catch (err) {
+        console.warn('Initial data load notice:', err);
+      }
+    };
+
+    initData();
+  }, []);
+
+  // Smooth auto-scroll to bottom on new messages or typing indicator
   useEffect(() => {
-    if (messages.length > 0) {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (messages.length > 0 || isLoading) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [messages, isLoading])
+  }, [messages, isLoading]);
 
-  const handleSend = async (textToSend) => {
-    const messageContent = (textToSend || prompt).trim()
-    if (!messageContent || isLoading) return
+  const triggerError = (msg) => {
+    setErrorToast(msg);
+    setTimeout(() => setErrorToast(null), 5000);
+  };
 
-    const userMessage = {
-      id: Date.now(),
+  // Typing delay calculation based on mood for realistic personality pacing
+  const getTypingDelay = (mood) => {
+    if (!settings.typingAnimationEnabled) return 200;
+    switch (mood) {
+      case 'happy':
+        return 700; // fast & excited
+      case 'sad':
+        return 1300; // slow & subdued
+      case 'angry':
+        return 1500; // hesitating / irritated
+      case 'drama':
+        return 1200; // theatrical pause
+      case 'tired':
+        return 1600; // drowsy & lagging
+      case 'mother':
+        return 900; // warm & attentive
+      case 'curious':
+        return 1100; // thoughtful
+      default:
+        return 800;
+    }
+  };
+
+  const handleSend = async (customText) => {
+    const textToSend = (customText || prompt).trim();
+    if (!textToSend || isLoading) return;
+
+    // Optional audio chime for user send
+    if (settings.soundEnabled) {
+      soundEffects.playSend();
+    }
+
+    const optimisticUserMsg = {
+      id: `usr_${Date.now()}`,
       role: 'user',
-      content: messageContent,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    }
+      content: textToSend,
+      timestamp: new Date().toISOString(),
+    };
 
-    const updatedHistory = [...messages, userMessage]
-    setMessages(updatedHistory)
-    setPrompt('')
-    setIsLoading(true)
+    setMessages((prev) => [...prev, optimisticUserMsg]);
+    setPrompt('');
+    setIsLoading(true);
+
+    const startTime = Date.now();
 
     try {
-      // Send conversation history to backend Gemini API
-      const payload = {
-        messages: updatedHistory.map((m) => ({
-          role: m.role,
-          content: m.content,
-        })),
-        mode: selectedMode,
+      const data = await sendMessage(
+        textToSend,
+        null,
+        settings.characterName || characterState.characterName
+      );
+
+      // Model metadata
+      if (data.model) {
+        setActiveModel(data.model);
       }
 
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
+      // Emotional typing delay
+      const requiredDelay = getTypingDelay(data.characterState?.currentMood || characterState.currentMood);
+      const elapsed = Date.now() - startTime;
+      if (requiredDelay > elapsed) {
+        await new Promise((r) => setTimeout(r, requiredDelay - elapsed));
+      }
 
-      if (res.ok) {
-        const data = await res.json()
-        if (data.model) setActiveModel(data.model)
+      // Audio feedback chime tuned to the AI's mood
+      if (settings.soundEnabled && data.characterState?.currentMood) {
+        soundEffects.playReceive(data.characterState.currentMood);
+      }
 
-        const assistantMessage = {
-          id: Date.now() + 1,
-          role: 'assistant',
-          content: data.reply || "I'm right here with you!",
-          model: data.model,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        }
-        setMessages((prev) => [...prev, assistantMessage])
+      // Update state
+      if (data.characterState) {
+        setCharacterState(data.characterState);
+      }
+
+      // Append assistant message
+      if (data.assistantMessage) {
+        setMessages((prev) => [...prev, data.assistantMessage]);
       } else {
-        const errData = await res.json().catch(() => ({}))
-        const errorText = errData.detail || 'Could not connect to Gemini API.'
         setMessages((prev) => [
           ...prev,
           {
-            id: Date.now() + 1,
+            id: `ast_${Date.now()}`,
             role: 'assistant',
-            content: `⚠️ Error: ${errorText}`,
-            isError: true,
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            content: data.reply || '...',
+            mood: data.characterState?.currentMood || 'normal',
+            moodIntensity: data.characterState?.moodIntensity || 0.5,
+            reaction: data.analysis?.reaction || null,
+            timestamp: new Date().toISOString(),
           },
-        ])
+        ]);
       }
-    } catch {
+    } catch (err) {
+      console.error('Send error:', err);
+      triggerError(err.message || 'Failed to get response from Mood AI.');
+      // Revert or add error message
       setMessages((prev) => [
         ...prev,
         {
-          id: Date.now() + 1,
+          id: `err_${Date.now()}`,
           role: 'assistant',
-          content: "⚠️ Failed to reach the backend. Make sure the FastAPI server is running on port 8000.",
+          content: `⚠️ Error: ${err.message || 'Could not reach server. Please make sure the FastAPI backend is running.'}`,
+          mood: 'angry',
+          moodIntensity: 0.8,
           isError: true,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          timestamp: new Date().toISOString(),
         },
-      ])
+      ]);
     } finally {
-      setIsLoading(false)
-      setTimeout(() => inputRef.current?.focus(), 100)
+      setIsLoading(false);
+      setTimeout(() => inputRef.current?.focus(), 150);
     }
-  }
+  };
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      handleSend()
+      e.preventDefault();
+      handleSend();
     }
-  }
+  };
 
-  const handleNewChat = () => {
-    setMessages([])
-    setPrompt('')
-    localStorage.removeItem('chat_messages')
-    setTimeout(() => inputRef.current?.focus(), 100)
-  }
+  const handleNewChat = async () => {
+    try {
+      await clearHistory();
+      setMessages([]);
+      setPrompt('');
+      setTimeout(() => inputRef.current?.focus(), 100);
+    } catch {
+      setMessages([]);
+    }
+  };
 
-  const handleCopy = (id, text) => {
-    navigator.clipboard.writeText(text)
-    setCopiedId(id)
-    setTimeout(() => setCopiedId(null), 1800)
-  }
+  const handleClearChat = async () => {
+    if (window.confirm('Clear the current chat messages? (Mood state is preserved)')) {
+      await handleNewChat();
+    }
+  };
 
-  // Format assistant messages (render code snippets and linebreaks nicely)
-  const renderMessageContent = (content) => {
-    if (content.includes('```')) {
-      const parts = content.split(/(```[\s\S]*?```)/g)
-      return parts.map((part, index) => {
-        if (part.startsWith('```') && part.endsWith('```')) {
-          const firstLineEnd = part.indexOf('\n')
-          const language = part.slice(3, firstLineEnd).trim() || 'code'
-          const code = part.slice(firstLineEnd + 1, -3)
-          return (
-            <div key={index} className="my-3 rounded-lg overflow-hidden border border-outline-variant/30">
-              <div className="bg-surface-container-high px-3 py-1 text-xs font-label-sm text-on-surface-variant flex justify-between items-center">
-                <span>{language}</span>
-                <button
-                  type="button"
-                  onClick={() => handleCopy(`code-${index}`, code)}
-                  className="hover:text-on-surface text-[11px] flex items-center gap-1"
-                >
-                  <span className="material-symbols-outlined text-[14px]">content_copy</span>
-                  Copy
-                </button>
-              </div>
-              <pre className="p-3 bg-surface-container-lowest text-on-surface font-code-block text-xs overflow-x-auto m-0">
-                <code>{code}</code>
-              </pre>
-            </div>
-          )
+  const handleResetMood = async () => {
+    try {
+      const data = await resetMood();
+      const newState = data.state || data.characterState;
+      if (newState) {
+        setCharacterState(newState);
+      }
+    } catch (err) {
+      triggerError('Failed to reset mood: ' + err.message);
+    }
+  };
+
+  const handleResetAll = async () => {
+    try {
+      const data = await resetAll();
+      const newState = data.state || data.characterState;
+      if (newState) {
+        setCharacterState(newState);
+      }
+      setMessages([]);
+    } catch (err) {
+      triggerError('Failed to reset all data: ' + err.message);
+    }
+  };
+
+  const handleOverrideMood = async (mood) => {
+    try {
+      const data = await overrideMood(mood);
+      const newState = data.state || data.characterState;
+      if (newState) {
+        setCharacterState(newState);
+      }
+      if (settings.soundEnabled) {
+        soundEffects.playReceive(mood);
+      }
+    } catch (err) {
+      triggerError('Failed to override mood: ' + err.message);
+    }
+  };
+
+  const handleRegenerate = async () => {
+    if (isLoading || messages.length === 0) return;
+    setIsLoading(true);
+
+    try {
+      // Optimistically remove last assistant message
+      setMessages((prev) => {
+        const lastIdx = prev.map((m) => m.role).lastIndexOf('assistant');
+        if (lastIdx !== -1) {
+          return prev.slice(0, lastIdx);
         }
-        return (
-          <p key={index} className="whitespace-pre-wrap my-1">
-            {part}
-          </p>
-        )
-      })
-    }
-    return <p className="whitespace-pre-wrap">{content}</p>
-  }
+        return prev;
+      });
 
-  const hasMessages = messages.length > 0
+      const data = await regenerateLast();
+
+      if (data.characterState) {
+        setCharacterState(data.characterState);
+      }
+
+      if (settings.soundEnabled && data.characterState?.currentMood) {
+        soundEffects.playReceive(data.characterState.currentMood);
+      }
+
+      if (data.assistantMessage) {
+        setMessages((prev) => [...prev, data.assistantMessage]);
+      }
+    } catch (err) {
+      triggerError('Failed to regenerate: ' + err.message);
+    } finally {
+      setIsLoading(false);
+      setTimeout(() => inputRef.current?.focus(), 100);
+    }
+  };
+
+  const handleUpdateCharacterName = async (name) => {
+    try {
+      await updateName(name);
+      setCharacterState((prev) => ({ ...prev, characterName: name }));
+    } catch (err) {
+      triggerError('Failed to update character name: ' + err.message);
+    }
+  };
+
+  const hasMessages = messages.length > 0;
+  const currentMood = characterState.currentMood || 'normal';
+  const intensity = characterState.moodIntensity ?? 0.5;
+  const moodMeta = MOOD_META[currentMood] || MOOD_META.normal;
 
   return (
     <div className="flex flex-col min-h-screen bg-surface text-on-surface font-body-md selection:bg-secondary-fixed">
-      {/* Fixed Top Header */}
-      <header className="fixed top-0 right-0 left-0 h-14 bg-surface/85 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)] z-40 flex items-center justify-between px-space-lg">
-        <div className="flex items-center gap-3">
+      {/* Top Header */}
+      <Header
+        characterName={settings.characterName || characterState.characterName}
+        characterState={characterState}
+        hasMessages={hasMessages}
+        soundEnabled={settings.soundEnabled}
+        onToggleSound={() => setSettings((s) => ({ ...s, soundEnabled: !s.soundEnabled }))}
+        onToggleDevPanel={() => setIsDevPanelOpen((v) => !v)}
+        isDevPanelOpen={isDevPanelOpen}
+        onOpenSettings={() => setIsSettingsOpen(true)}
+        onNewChat={handleNewChat}
+        onClearChat={handleClearChat}
+        activeModel={activeModel}
+      />
+
+      {/* Transient Error Toast Banner */}
+      {errorToast && (
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-error-container text-on-error-container border border-error/30 px-4 py-2.5 rounded-full shadow-lg text-xs flex items-center gap-2 animate-in fade-in">
+          <span className="material-symbols-outlined text-[16px] text-error">error</span>
+          <span>{errorToast}</span>
           <button
-            onClick={handleNewChat}
-            title="New chat"
             type="button"
-            className="w-9 h-9 flex items-center justify-center rounded-full text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-colors cursor-pointer"
+            onClick={() => setErrorToast(null)}
+            className="hover:opacity-75 cursor-pointer ml-1"
           >
-            <span className="material-symbols-outlined text-[22px]">edit_square</span>
+            <span className="material-symbols-outlined text-[14px]">close</span>
           </button>
-
-          {hasMessages && (
-            <div className="flex items-center gap-2 text-xs font-label-md text-on-surface-variant">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              <span>Active Chat</span>
-              <span className="text-outline-variant">•</span>
-              <span className="px-2 py-0.5 rounded-full bg-surface-container text-on-surface text-[11px]">
-                {selectedMode}
-              </span>
-            </div>
-          )}
         </div>
-
-        <div className="flex items-center gap-2">
-          {hasMessages && (
-            <button
-              onClick={handleNewChat}
-              className="text-xs text-on-surface-variant hover:text-error hover:bg-surface-container px-2.5 py-1 rounded-full transition-colors flex items-center gap-1 cursor-pointer"
-              title="Clear current conversation"
-              type="button"
-            >
-              <span className="material-symbols-outlined text-[16px]">delete_outline</span>
-              <span>Clear</span>
-            </button>
-          )}
-          <span className="text-[11px] font-label-sm text-on-surface-variant bg-surface-container-high px-2 py-0.5 rounded-full">
-            {activeModel}
-          </span>
-        </div>
-      </header>
+      )}
 
       {/* Main Container */}
-      <main className="flex-1 flex flex-col pt-14 w-full">
-        {/* State A: Ongoing Conversation View */}
+      <main className="flex-1 flex flex-col pt-14 w-full relative">
         {hasMessages ? (
-          <div className="flex-1 flex flex-col justify-between w-full max-w-[800px] mx-auto px-4 pb-4">
-            {/* Scrollable Message Stream */}
-            <div className="flex-1 flex flex-col gap-4 py-6 overflow-y-auto">
-              {messages.map((msg) => {
-                const isUser = msg.role === 'user'
-                return (
-                  <div
-                    key={msg.id}
-                    className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} group w-full`}
-                  >
-                    <div
-                      className={`max-w-[85%] md:max-w-[75%] px-4 py-3 rounded-2xl text-body-md transition-all shadow-sm ${
-                        isUser
-                          ? 'bg-primary text-on-primary rounded-br-xs'
-                          : msg.isError
-                          ? 'bg-error-container text-on-error-container rounded-bl-xs border border-error/20'
-                          : 'bg-surface-container-lowest text-on-surface rounded-bl-xs border border-outline-variant/30'
-                      }`}
-                    >
-                      {renderMessageContent(msg.content)}
-                    </div>
+          /* State A: Ongoing Conversation View */
+          <div className="flex-1 flex flex-col justify-between w-full max-w-[840px] mx-auto px-4 pb-4">
+            {/* Scrollable Message List */}
+            <div className="flex-1 flex flex-col gap-1 py-4 overflow-y-auto">
+              {messages.map((msg, index) => {
+                const isLatestAssistant =
+                  msg.role === 'assistant' &&
+                  index === messages.map((m) => m.role).lastIndexOf('assistant');
 
-                    {/* Meta actions (timestamp & copy) */}
-                    <div
-                      className={`flex items-center gap-2 mt-1 px-1 text-[11px] font-label-sm text-on-surface-variant opacity-70 group-hover:opacity-100 transition-opacity ${
-                        isUser ? 'flex-row-reverse' : 'flex-row'
-                      }`}
-                    >
-                      <span>{msg.timestamp}</span>
-                      {!isUser && (
-                        <button
-                          type="button"
-                          onClick={() => handleCopy(msg.id, msg.content)}
-                          className="hover:text-on-surface flex items-center gap-0.5 cursor-pointer"
-                          title="Copy response"
-                        >
-                          <span className="material-symbols-outlined text-[14px]">
-                            {copiedId === msg.id ? 'check' : 'content_copy'}
-                          </span>
-                          <span>{copiedId === msg.id ? 'Copied' : 'Copy'}</span>
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )
+                return (
+                  <ChatMessageItem
+                    key={msg.id || index}
+                    message={msg}
+                    isLatestAssistant={isLatestAssistant}
+                    onRegenerate={handleRegenerate}
+                    characterName={settings.characterName || characterState.characterName}
+                  />
+                );
               })}
 
-              {/* Gemini Loading / Typing indicator */}
+              {/* Emotional Typing Indicator */}
               {isLoading && (
-                <div className="flex items-start gap-2">
-                  <div className="bg-surface-container-lowest border border-outline-variant/30 text-on-surface px-4 py-3 rounded-2xl rounded-bl-xs shadow-sm flex items-center gap-2 text-body-md">
-                    <span className="material-symbols-outlined text-[18px] text-primary animate-spin">
-                      progress_activity
-                    </span>
-                    <span className="text-on-surface-variant text-sm">Thinking with Gemini...</span>
-                  </div>
-                </div>
+                <TypingIndicator
+                  mood={currentMood}
+                  typingStyle={characterState.typingStyle || 'normal'}
+                  characterName={settings.characterName || characterState.characterName}
+                />
               )}
+
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Docked Sticky Bottom Input Bar */}
+            {/* Docked Sticky Bottom Pill Input */}
             <div className="sticky bottom-0 bg-surface/90 backdrop-blur-md pt-2 pb-3 w-full">
-              <div className="w-full bg-surface-container-lowest border border-outline-variant/30 rounded-full shadow-md px-space-md py-space-sm flex items-center gap-space-sm transition-all focus-within:ring-2 focus-within:ring-primary/20">
-                <button
-                  className="w-8 h-8 flex items-center justify-center rounded-full text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-colors shrink-0 cursor-pointer"
-                  title="Add attachment"
-                  type="button"
-                  onClick={() => alert('Attachments feature ready for image & file uploads!')}
+              <div
+                className="w-full bg-surface-container-lowest border rounded-full shadow-md px- space-md py-2 flex items-center gap-2 transition-all focus-within:ring-2"
+                style={{ borderColor: `${moodMeta.color}40` }}
+              >
+                {/* Current Mood Mini Dot */}
+                <div
+                  className="w-8 h-8 flex items-center justify-center rounded-full shrink-0 text-base select-none cursor-pointer"
+                  title={`Current Mood: ${moodMeta.label} (${Math.round(intensity * 100)}%)`}
+                  onClick={() => setIsDevPanelOpen(true)}
                 >
-                  <span className="material-symbols-outlined text-[20px]">add</span>
-                </button>
+                  <span>{moodMeta.emoji}</span>
+                </div>
 
                 <input
                   ref={inputRef}
                   id="prompt-input"
-                  className="flex-1 bg-transparent outline-none font-body-md text-body-md text-on-surface placeholder:text-outline-variant"
-                  placeholder="Reply to your babe..."
+                  className="flex-1 bg-transparent outline-none font-body-md text-sm md:text-base text-on-surface placeholder:text-outline-variant px-1"
+                  placeholder={`Reply to ${settings.characterName || characterState.characterName}...`}
                   type="text"
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
@@ -326,63 +425,11 @@ function App() {
                   disabled={isLoading}
                 />
 
-                <div className="flex items-center gap-space-xs shrink-0">
+                <div className="flex items-center gap-1.5 shrink-0 pr-1">
                   <button
-                    className="w-8 h-8 flex items-center justify-center rounded-full text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-colors cursor-pointer"
-                    title="Voice input"
-                    type="button"
-                    onClick={() => alert('Voice input activated')}
-                  >
-                    <span className="material-symbols-outlined text-[20px]">mic</span>
-                  </button>
-
-                  <div className="relative">
-                    <button
-                      className="flex items-center gap-space-xs px-space-sm py-1 rounded-full bg-surface-container hover:bg-surface-container-high text-on-surface transition-colors font-label-sm text-label-sm cursor-pointer"
-                      type="button"
-                      onClick={() => setIsModesOpen(!isModesOpen)}
-                    >
-                      <span className="font-medium">{selectedMode}</span>
-                      <span className="material-symbols-outlined text-[16px] text-on-surface-variant">
-                        expand_more
-                      </span>
-                    </button>
-
-                    {isModesOpen && (
-                      <div className="absolute right-0 bottom-full mb-2 bg-surface-container-lowest border border-outline-variant/30 rounded-xl shadow-xl py-1.5 min-w-[170px] z-50 animate-in fade-in">
-                        {modes.map((m) => (
-                          <button
-                            key={m.name}
-                            type="button"
-                            onClick={() => {
-                              setSelectedMode(m.name)
-                              setIsModesOpen(false)
-                            }}
-                            className={`w-full text-left px-3 py-2 text-xs transition-colors hover:bg-surface-container flex flex-col cursor-pointer ${
-                              selectedMode === m.name ? 'bg-surface-container-high font-semibold' : ''
-                            }`}
-                          >
-                            <div className="flex items-center justify-between">
-                              <span className="text-on-surface font-medium">{m.name}</span>
-                              {selectedMode === m.name && (
-                                <span className="material-symbols-outlined text-[14px] text-primary">
-                                  check
-                                </span>
-                              )}
-                            </div>
-                            <span className="text-[10px] text-on-surface-variant font-normal">
-                              {m.desc}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  <button
-                    className={`w-8 h-8 flex items-center justify-center rounded-full transition-all shrink-0 ml-1 cursor-pointer ${
+                    className={`w-8 h-8 flex items-center justify-center rounded-full transition-all shrink-0 cursor-pointer ${
                       prompt.trim() && !isLoading
-                        ? 'bg-primary text-on-primary hover:opacity-90 scale-100'
+                        ? 'bg-primary text-on-primary hover:opacity-90 scale-100 shadow-xs'
                         : 'bg-surface-container text-on-surface-variant opacity-40 cursor-not-allowed scale-95'
                     }`}
                     title="Send message"
@@ -397,25 +444,36 @@ function App() {
             </div>
           </div>
         ) : (
-          /* State B: Centered Initial Screen (Original Hero Layout) */
-          <div className="flex-1 min-h-[calc(100vh-3.5rem)] flex flex-col justify-center items-center px-gutter py-space-xl">
-            <div className="w-full max-w-[768px] flex flex-col items-center gap-space-lg">
-              {/* Input Pill */}
-              <div className="w-full bg-surface-container-lowest border border-outline-variant/30 rounded-full shadow-sm hover:shadow-md px-space-md py-space-sm flex items-center gap-space-sm transition-all focus-within:shadow-md">
-                <button
-                  className="w-8 h-8 flex items-center justify-center rounded-full text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-colors shrink-0 cursor-pointer"
-                  title="Add attachment"
-                  type="button"
-                  onClick={() => alert('Attachments feature ready for image & file uploads!')}
+          /* State B: Centered Initial Screen (Original Hero Layout with Emotional Presets) */
+          <div className="flex-1 min-h-[calc(100vh-3.5rem)] flex flex-col justify-center items-center px-4 py-8">
+            <div className="w-full max-w-[768px] flex flex-col items-center gap-6">
+              {/* Hero Avatar & Presentation */}
+              <EmptyState
+                characterName={settings.characterName || characterState.characterName}
+                currentMood={currentMood}
+                intensity={intensity}
+                reaction={null}
+                onSelectPrompt={(text) => handleSend(text)}
+              />
+
+              {/* Centered Pill Input Bar */}
+              <div
+                className="w-full bg-surface-container-lowest border rounded-full shadow-sm hover:shadow-md px-4 py-2.5 flex items-center gap-2 transition-all focus-within:shadow-md focus-within:ring-2"
+                style={{ borderColor: `${moodMeta.color}55` }}
+              >
+                <div
+                  className="w-8 h-8 flex items-center justify-center rounded-full shrink-0 text-lg select-none cursor-pointer"
+                  title={`Current Mood: ${moodMeta.label}`}
+                  onClick={() => setIsDevPanelOpen(true)}
                 >
-                  <span className="material-symbols-outlined text-[20px]">add</span>
-                </button>
+                  <span>{moodMeta.emoji}</span>
+                </div>
 
                 <input
                   ref={inputRef}
                   id="prompt-input"
-                  className="flex-1 bg-transparent outline-none font-body-md text-body-md text-on-surface placeholder:text-outline-variant"
-                  placeholder="Chat with your babe..."
+                  className="flex-1 bg-transparent outline-none font-body-md text-sm md:text-base text-on-surface placeholder:text-outline-variant px-1"
+                  placeholder={`Chat with ${settings.characterName || characterState.characterName}...`}
                   type="text"
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
@@ -425,93 +483,45 @@ function App() {
                   autoFocus
                 />
 
-                <div className="flex items-center gap-space-xs shrink-0">
-                  <button
-                    className="w-8 h-8 flex items-center justify-center rounded-full text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-colors cursor-pointer"
-                    title="Voice input"
-                    type="button"
-                    onClick={() => alert('Voice input activated')}
-                  >
-                    <span className="material-symbols-outlined text-[20px]">mic</span>
-                  </button>
-
-                  <div className="relative">
-                    <button
-                      className="flex items-center gap-space-xs px-space-sm py-1 rounded-full bg-surface-container hover:bg-surface-container-high text-on-surface transition-colors font-label-sm text-label-sm cursor-pointer"
-                      type="button"
-                      onClick={() => setIsModesOpen(!isModesOpen)}
-                    >
-                      <span className="font-medium">{selectedMode}</span>
-                      <span className="material-symbols-outlined text-[16px] text-on-surface-variant">
-                        expand_more
-                      </span>
-                    </button>
-
-                    {isModesOpen && (
-                      <div className="absolute right-0 bottom-full mb-2 bg-surface-container-lowest border border-outline-variant/30 rounded-xl shadow-xl py-1.5 min-w-[170px] z-50">
-                        {modes.map((m) => (
-                          <button
-                            key={m.name}
-                            type="button"
-                            onClick={() => {
-                              setSelectedMode(m.name)
-                              setIsModesOpen(false)
-                            }}
-                            className={`w-full text-left px-3 py-2 text-xs transition-colors hover:bg-surface-container flex flex-col cursor-pointer ${
-                              selectedMode === m.name ? 'bg-surface-container-high font-semibold' : ''
-                            }`}
-                          >
-                            <div className="flex items-center justify-between">
-                              <span className="text-on-surface font-medium">{m.name}</span>
-                              {selectedMode === m.name && (
-                                <span className="material-symbols-outlined text-[14px] text-primary">
-                                  check
-                                </span>
-                              )}
-                            </div>
-                            <span className="text-[10px] text-on-surface-variant font-normal">
-                              {m.desc}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
+                <div className="flex items-center gap-1.5 shrink-0">
                   {prompt.trim() && (
                     <button
-                      className="w-8 h-8 flex items-center justify-center rounded-full bg-primary text-on-primary hover:opacity-90 transition-opacity shrink-0 ml-1 cursor-pointer"
+                      className="w-8 h-8 flex items-center justify-center rounded-full bg-primary text-on-primary hover:opacity-90 transition-opacity shrink-0 cursor-pointer shadow-xs"
                       title="Send message"
                       type="button"
+                      disabled={isLoading}
                       onClick={() => handleSend()}
                     >
-                      <span className="material-symbols-outlined text-[18px]">
-                        arrow_upward
-                      </span>
+                      <span className="material-symbols-outlined text-[18px]">arrow_upward</span>
                     </button>
                   )}
                 </div>
               </div>
-
-              {/* Suggestion Chips */}
-              <div className="flex flex-wrap justify-center gap-2 max-w-[640px] pt-2">
-                {SUGGESTED_PROMPTS.map((suggestion, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => handleSend(suggestion)}
-                    className="px-3 py-1.5 rounded-full bg-surface-container-low hover:bg-surface-container-high border border-outline-variant/20 text-xs text-on-surface transition-all text-left flex items-center gap-1.5 shadow-xs cursor-pointer"
-                  >
-                    <span>{suggestion}</span>
-                  </button>
-                ))}
-              </div>
             </div>
           </div>
         )}
+
+        {/* Developer Debug Panel Drawer */}
+        {isDevPanelOpen && (
+          <DevPanel
+            state={characterState}
+            onOverrideMood={handleOverrideMood}
+            onClose={() => setIsDevPanelOpen(false)}
+            characterName={settings.characterName || characterState.characterName}
+          />
+        )}
+
+        {/* Settings Modal */}
+        <SettingsModal
+          isOpen={isSettingsOpen}
+          onClose={() => setIsSettingsOpen(false)}
+          settings={settings}
+          onUpdateSettings={(newSettings) => setSettings((s) => ({ ...s, ...newSettings }))}
+          onResetMood={handleResetMood}
+          onResetAll={handleResetAll}
+          onUpdateCharacterName={handleUpdateCharacterName}
+        />
       </main>
     </div>
-  )
+  );
 }
-
-export default App
