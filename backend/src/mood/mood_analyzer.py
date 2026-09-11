@@ -25,6 +25,8 @@ class MoodAnalyzer:
 
         system_instruction = f"""You are the Mood Analysis Engine for "{character_name}", an emotion-aware AI companion.
 Your task is NOT to detect the user's emotion, but to analyze the conversation and determine how the fictional character "{character_name}" should CURRENTLY BEHAVE and what emotional state they should be in.
+The conversation can be in English, Manglish (Malayalam written phonetically using the English/Latin alphabet, e.g. "ellarkkum sugam alle", "sugamano", "njan padikkuva", "adipoli"), or Malayalam. Understand all of them.
+
 
 CURRENT CHARACTER STATE:
 - Current Mood: {current_state.currentMood} (Intensity: {current_state.moodIntensity})
@@ -138,6 +140,9 @@ Generate JSON:"""
             'why are you quiet' in text or
             'what happened' in text or
             'tell me' in text or
+            'entha patti' in text or
+            'enthada' in text or
+            'mindathe' in text or
             text in ('?', '???')
         ):
             return MoodAnalysis(
@@ -154,7 +159,7 @@ Generate JSON:"""
             )
 
         # Drama trigger: saying sorry
-        if 'sorry' in text or 'my bad' in text or 'apologize' in text:
+        if 'sorry' in text or 'my bad' in text or 'apologize' in text or 'kshamikku' in text or 'mappu' in text:
             return MoodAnalysis(
                 mood='drama',
                 intensity=0.8,
@@ -169,7 +174,7 @@ Generate JSON:"""
             )
 
         # Happy triggers
-        if any(w in text for w in ('guess what', 'passed my exam', 'awesome', 'yay', 'celebrate', 'great news', 'won')) or text.endswith('!!'):
+        if any(w in text for w in ('guess what', 'passed my exam', 'awesome', 'yay', 'celebrate', 'great news', 'won', 'adipoli', 'pwoli', 'santhosham', 'polichu', 'jeyichu')) or text.endswith('!!'):
             return MoodAnalysis(
                 mood='happy',
                 intensity=0.9,
@@ -184,7 +189,7 @@ Generate JSON:"""
             )
 
         # Sad triggers
-        if any(w in text for w in ('failed', 'sad', 'crying', 'depressed', 'broke up', 'lost my', 'terrible day', 'bad day')):
+        if any(w in text for w in ('failed', 'sad', 'crying', 'depressed', 'broke up', 'lost my', 'terrible day', 'bad day', 'vishamam', 'karachil', 'kashtam', 'thottu', 'sangadam')):
             return MoodAnalysis(
                 mood='sad',
                 intensity=0.8,
@@ -199,7 +204,7 @@ Generate JSON:"""
             )
 
         # Mother triggers
-        if any(w in text for w in ('study now', 'going to study', "haven't eaten", 'skipping lunch', 'sick', 'headache', 'going to sleep')):
+        if any(w in text for w in ('study now', 'going to study', "haven't eaten", 'skipping lunch', 'sick', 'headache', 'going to sleep', 'padikkan', 'padikkuva', 'kazhichilla', 'food kazhichilla', 'urangaan')):
             return MoodAnalysis(
                 mood='mother',
                 intensity=0.85,
@@ -214,7 +219,7 @@ Generate JSON:"""
             )
 
         # Curious triggers
-        if text.startswith('why') or text.startswith('how') or 'what do you think about' in text or 'secret' in text:
+        if text.startswith('why') or text.startswith('how') or text.startswith('entha') or text.startswith('engane') or 'what do you think about' in text or 'secret' in text:
             return MoodAnalysis(
                 mood='curious',
                 intensity=0.75,
@@ -229,7 +234,7 @@ Generate JSON:"""
             )
 
         # Tired triggers
-        if any(w in text for w in ('tired', 'exhausted', 'sleepy', 'need to sleep')):
+        if any(w in text for w in ('tired', 'exhausted', 'sleepy', 'need to sleep', 'ksheenam', 'urakkam', 'urangatte', 'maduthu')):
             return MoodAnalysis(
                 mood='tired',
                 intensity=0.8,

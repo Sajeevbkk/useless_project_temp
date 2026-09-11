@@ -4,39 +4,44 @@ import { Avatar } from './Avatar';
 
 const EMOTION_PROMPT_PRESETS = [
   {
+    category: 'Normal',
+    mood: 'normal',
+    text: 'Ellarkkum sugam alle? Enthokkeyund vishesham? 🙂',
+  },
+  {
     category: 'Happy',
     mood: 'happy',
-    text: 'Guess what?! I just got the promotion I worked so hard for! 🎉',
+    text: 'Guess what?! Enikku nalla oru promotion kitti, adipoli aayi! 🎉',
   },
   {
     category: 'Sad',
     mood: 'sad',
-    text: 'I had such an exhausting, terrible day and feel really lonely... 😔',
+    text: 'Innu nalla kashtapadulla divasam aayirunnu, nalla vishamam thonni... 😔',
   },
   {
     category: 'Angry',
     mood: 'angry',
-    text: 'Why do you always give me short answers? You never care! 😤',
+    text: 'Nee entha eppozhum kurachu mathram parayunne? Mindan thonnanille! 😤',
   },
   {
     category: 'Caring',
     mood: 'mother',
-    text: "I haven't eaten all day, my head hurts, and I have 4 hours of homework left 🤒",
+    text: "Njan innu food onnum kazhichilla, nalla thala vedhana edukkunnu 🤒",
   },
   {
     category: 'Drama',
     mood: 'drama',
-    text: 'OMG sit down right now... you will NOT believe the secret I just uncovered! 🎭',
+    text: 'Ente daivame, ithu kando... nee orikkalum vishwasikkilla! 🎭',
   },
   {
     category: 'Curious',
     mood: 'curious',
-    text: 'If the universe is expanding, what exactly is it expanding into? 🤔',
+    text: 'Athegana sambhavichath ennu enikku paranju tharumo? 🤔',
   },
   {
     category: 'Tired',
     mood: 'tired',
-    text: "It's 3:30 AM, my eyes are burning, and I can't stop scrolling... 🥱",
+    text: "Samayam 3:30 AM aayi, nalla ksheenam undu... 🥱",
   },
 ];
 

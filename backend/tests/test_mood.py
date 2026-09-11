@@ -140,5 +140,33 @@ class TestMoodAI(unittest.TestCase):
         )
         self.assertGreater(len(resp), 30)
 
+    def test_manglish_and_length_constraint(self):
+        for mood in ['happy', 'sad', 'angry', 'mother', 'drama', 'curious', 'tired', 'normal']:
+            resp = response_generator.heuristic_generate(
+                "test message",
+                CharacterState(currentMood=mood, moodIntensity=0.8),
+                "long",
+                "Mira"
+            )
+            # Must be strictly 1 or 2 lines
+            lines = [l for l in resp.strip().splitlines() if l.strip()]
+            self.assertLessEqual(len(lines), 2, f"Response for {mood} exceeded 2 lines")
+            # Must not be empty
+            self.assertGreater(len(resp.strip()), 0)
+
+    def test_manglish_mood_triggers(self):
+        engine = MoodEngine()
+        # Happy trigger in Manglish
+        analysis = mood_analyzer.heuristic_analyze("ente exam njan pass aayi adipoli!!", [], engine.get_state())
+        self.assertEqual(analysis.mood, "happy")
+
+        # Sad trigger in Manglish
+        analysis = mood_analyzer.heuristic_analyze("nalla vishamam thonnunu kashtam", [], engine.get_state())
+        self.assertEqual(analysis.mood, "sad")
+
+        # Mother trigger in Manglish
+        analysis = mood_analyzer.heuristic_analyze("njan padikkuva food onnum kazhichilla", [], engine.get_state())
+        self.assertEqual(analysis.mood, "mother")
+
 if __name__ == '__main__':
     unittest.main()
