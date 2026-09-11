@@ -1,0 +1,18 @@
+{
+  "name": "website-base",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Fullstack web application with FastAPI backend and React frontend",
+  "scripts": {
+    "dev": "concurrently -n \"BACKEND,FRONTEND\" -c \"cyan,magenta\" \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "cd backend && .venv\\Scripts\\python.exe -m uvicorn main:app --reload --host 127.0.0.1 --port 8000",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "build:frontend": "npm --prefix frontend run build",
+    "install:frontend": "npm --prefix frontend install",
+    "install:backend": "cd backend && python -m venv .venv && .venv\\Scripts\\python.exe -m pip install -r requirements.txt",
+    "install:all": "npm install && npm run install:frontend && npm run install:backend"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

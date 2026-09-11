@@ -26,10 +26,10 @@
 ## Technical Details
 ### Technologies/Components Used
 For Software:
-- [Languages used]
-- [Frameworks used]
-- [Libraries used]
-- [Tools used]
+- Languages: JavaScript (ES6+), Python 3.12
+- Frameworks: React 19, FastAPI
+- Libraries: Vite, Uvicorn, Pydantic, Concurrently
+- Tools: Node.js, npm, pip, venv
 
 For Hardware:
 - [List main components]
@@ -39,10 +39,23 @@ For Hardware:
 ### Implementation
 For Software:
 # Installation
-[commands]
+```bash
+# Install all dependencies (root, frontend, and backend virtual environment)
+npm run install:all
+```
 
 # Run
-[commands]
+```bash
+# Run both Frontend (React) and Backend (FastAPI) concurrently
+npm run dev
+
+# Or run individually:
+# Frontend only (http://localhost:5173):
+npm run dev:frontend
+
+# Backend only (http://127.0.0.1:8000 | Swagger at /docs):
+npm run dev:backend
+```
 
 ### Project Documentation
 For Software:
