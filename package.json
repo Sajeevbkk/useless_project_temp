@@ -5,7 +5,7 @@
   "description": "Fullstack web application with FastAPI backend and React frontend",
   "scripts": {
     "dev": "concurrently -n \"BACKEND,FRONTEND\" -c \"cyan,magenta\" \"npm run dev:backend\" \"npm run dev:frontend\"",
-    "dev:backend": "cd backend && .venv\\Scripts\\python.exe -m uvicorn main:app --reload --host 127.0.0.1 --port 8000",
+    "dev:backend": "cd backend && .venv\\Scripts\\python.exe -m uvicorn main:app --reload --host 127.0.0.1 --port 5098",
     "dev:frontend": "npm --prefix frontend run dev",
     "build:frontend": "npm --prefix frontend run build",
     "install:frontend": "npm --prefix frontend install",

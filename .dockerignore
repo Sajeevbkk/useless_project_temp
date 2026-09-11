@@ -1,0 +1,9 @@
+.git
+.gitignore
+.idea
+.venv
+**/node_modules
+**/__pycache__
+**/.pytest_cache
+backend/data/*.json
+frontend/dist

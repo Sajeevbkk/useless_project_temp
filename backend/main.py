@@ -16,6 +16,10 @@ app = FastAPI(
 )
 
 origins = [
+    "http://localhost:8097",
+    "http://127.0.0.1:8097",
+    "http://localhost:8080",
+    "http://127.0.0.1:8080",
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "http://localhost:3000",
@@ -51,5 +55,6 @@ def read_health():
 
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", 8000))
-    uvicorn.run("main:app", host="127.0.0.1", port=port, reload=True)
+    port = int(os.getenv("PORT", 5098))
+    host = os.getenv("HOST", "0.0.0.0")
+    uvicorn.run("main:app", host=host, port=port, reload=True)

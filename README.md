@@ -48,7 +48,7 @@ flowchart TD
     UI --> Audio["Web Audio Synthesizer (Mood Chimes)"]
     UI --> APIClient["Frontend API Service (/api)"]
     
-    subgraph Backend ["FastAPI Python Backend (Port 8000)"]
+    subgraph Backend ["FastAPI Python Backend (Port 5098)"]
         APIClient --> Router["FastAPI APIRouter (/api/chat, /state, /reset)"]
         Router --> ChatService["ChatService Coordinator"]
         
@@ -103,21 +103,47 @@ npm run dev
 ```
 
 The application will be accessible at:
-- **Frontend Web App**: [http://localhost:5173](http://localhost:5173)
-- **FastAPI Backend**: [http://127.0.0.1:8000](http://127.0.0.1:8000)
-- **Interactive Swagger Docs**: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
+- **Frontend Web App**: [http://localhost:8097](http://localhost:8097)
+- **FastAPI Backend**: [http://127.0.0.1:5098](http://127.0.0.1:5098)
+- **Interactive Swagger Docs**: [http://127.0.0.1:5098/docs](http://127.0.0.1:5098/docs)
 
 ### Individual Commands
 ```bash
 # Run backend only:
 npm run dev:backend
 
-# Run frontend only:
+# Run frontend only (serves on port 8097):
 npm run dev:frontend
 
 # Run backend unit tests:
 backend\.venv\Scripts\python.exe -m unittest backend/tests/test_mood.py
 ```
+
+---
+
+## 🐳 Docker Deployment
+
+The frontend runs on port **8097** and the backend runs on port **5098**. You can run the application with Docker in either of two ways:
+
+### Option A: Single Docker Container (Recommended)
+Build and run the entire application in a single container:
+```bash
+# Build the Docker image
+docker build -t mood-ai .
+
+# Run container (mapping port 8097)
+docker run -p 8097:8097 --env-file backend/.env mood-ai
+```
+Access the application at [http://localhost:8097](http://localhost:8097).
+
+### Option B: Docker Compose (Multi-Container)
+Run both backend and frontend as isolated services:
+```bash
+docker compose up --build
+```
+- **Frontend**: [http://localhost:8097](http://localhost:8097)
+- **Backend API**: [http://localhost:5098](http://localhost:5098)
+- **Swagger Docs**: [http://localhost:5098/docs](http://localhost:5098/docs)
 
 ---
 
