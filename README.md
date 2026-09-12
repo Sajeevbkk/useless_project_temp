@@ -2,17 +2,16 @@
 
 
 
-# MOOD AI 🎯
+# MIRA AI 🎯
 
 
 ## Basic Details
-### Team Name: MoodCraft
+### Team Name: Pirates
 
 
 ### Team Members
-- Team Lead: Sangeeth - [College Name]
-- Member 2: Navaneeth Krishna A - [College Name]
-- Member 3: Appu Kurian - [College Name]
+- Team Lead: Sangeeth - CEA
+- Member 2: Navaneeth Krishna A - CEA
 
 ### Project Description
 MOOD AI is an emotion-aware AI companion chatbot whose personality, tone, response length, typing behavior, emoji usage, reaction badges, and conversation energy dynamically evolve according to its real-time emotional state. Powered by the Google Gemini API and a stateful Mood Engine, it chats in snappy, realistic Manglish with emotional inertia and authentic human attitude.
