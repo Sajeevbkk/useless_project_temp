@@ -14,7 +14,7 @@
 - Member 2: Navaneeth Krishna A - CEA
 
 ### Project Description
-MOOD AI is an emotion-aware AI companion chatbot whose personality, tone, response length, typing behavior, emoji usage, reaction badges, and conversation energy dynamically evolve according to its real-time emotional state. Powered by the Google Gemini API and a stateful Mood Engine, it chats in snappy, realistic Manglish with emotional inertia and authentic human attitude.
+MIRA AI is an emotion-aware AI companion chatbot whose personality, tone, response length, typing behavior, emoji usage, reaction badges, and conversation energy dynamically evolve according to its real-time emotional state. Powered by the Google Gemini API and a stateful Mood Engine, it chats in snappy, realistic Manglish with emotional inertia and authentic human attitude.
 
 ### The Problem (that doesn't exist)
 Traditional AI chatbots are annoyingly polite, endlessly patient, and always sound like eager corporate customer service reps. They never get offended when you're rude, never get wildly excited when you celebrate, never give you the silent treatment when pestered at 3 AM, and never talk back like a real friend would.
